@@ -53,10 +53,13 @@ jobs:
         GLADOS_EXCHANGE_PLAN: ${{ secrets.GLADOS_EXCHANGE_PLAN }}
         GLADOS_VERBOSE: ${{ secrets.GLADOS_VERBOSE }}
 
+    # 签到失败时也要执行, 避免工作流因长期无活动被 GitHub 自动禁用
     - name: Keep alive
-      uses: liskin/gh-workflow-keepalive@v1 
-        
+      if: ${{ !cancelled() }}
+      uses: liskin/gh-workflow-keepalive@v1
+
     - name: Delete workflow runs
+      if: ${{ !cancelled() }}
       uses: Mattraks/delete-workflow-runs@v2
       with:
         token: ${{ github.token }}

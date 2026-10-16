@@ -1,6 +1,7 @@
 import requests
 import json
 import os
+import sys
 import logging
 from enum import Enum
 from typing import Dict, List, Optional, Tuple, Union
@@ -488,6 +489,12 @@ class Checker:
         """获取所有结果"""
         return [result.to_dict() for result in self.results]
 
+    def get_failed_cookies(self) -> List[int]:
+        """获取在所有域名上都签到失败的 Cookie 序号"""
+        all_cookies = {result.cookie_index for result in self.results}
+        ok_cookies = {result.cookie_index for result in self.results if result.code != CheckinStatus.FAILURE}
+        return sorted(all_cookies - ok_cookies)
+
     def format_results(self) -> Tuple[str, str, str]:
         """格式化结果"""
         results = self.get_results()
@@ -521,6 +528,8 @@ logger = init_logger()
 
 def main():
     """主函数"""
+    # 退出码非 0 时 Actions 会标记为失败, GitHub 会发送失败通知邮件
+    exit_code = 0
     try:
         # 1. 加载配置
         logger.info(f"{LogEmoji.START} 步骤 1: 加载配置")
@@ -529,6 +538,7 @@ def main():
         if not config.cookies_list:
             logger.error(f"{LogEmoji.ERROR} 未找到有效的 Cookie, 退出程序。")
             title, content = "# 未找到 cookies!", ""
+            exit_code = 1
         else:
             # 2. 执行签到
             logger.info(f"{LogEmoji.START} 步骤 2: 执行签到")
@@ -540,15 +550,23 @@ def main():
             title, content, log_content = checker.format_results()
             logger.info(f"\n{LogEmoji.END}========== 签到总结 ==========\n{title}\n{log_content}")
 
+            # 一个 Cookie 只要在任一域名上签到成功或重复签到就算正常
+            failed_cookies = checker.get_failed_cookies()
+            if failed_cookies:
+                logger.error(f"{LogEmoji.ERROR} Cookie {failed_cookies} 在所有域名上均签到失败, 请检查 Cookie 是否失效。")
+                exit_code = 1
+
     except Exception as e:
         logger.error(f"{LogEmoji.ERROR} 主程序执行过程中发生未预期的错误: {e}")
         title, content, log_content = "# 脚本执行出错", str(e), str(e)
+        exit_code = 1
 
     # 4. 发送推送
     logger.info(f"{LogEmoji.START} 步骤 4: 发送推送")
     push_service = PushService(config if "config" in locals() else "")
     push_service.send(title, content)
     logger.info(f"{LogEmoji.END} 签到完成")
+    sys.exit(exit_code)
 
 
 if __name__ == "__main__":
