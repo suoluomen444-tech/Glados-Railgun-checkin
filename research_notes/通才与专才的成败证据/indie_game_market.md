@@ -67,7 +67,7 @@ All of these are model estimates of gross revenue, apart from a few Valve aggreg
   - That is about 1% of 2024 releases.
 - **[Official: Valve at GDC, Mar 10, 2026]** — [Game Developer](https://www.gamedeveloper.com/business/valve-says-5-836-titles-earned-over-100-000-on-steam-in-2025); [Game World Observer](https://gameworldobserver.com/2026/03/11/in-2025-nearly-6000-games-earned-over-100000-on-steam-a-record); [PC Gamer](https://www.pcgamer.com/gaming-industry/valve-says-over-5000-games-made-over-usd100k-on-steam-last-year/); [PCGamesN](https://www.pcgamesn.com/steam/2025-report-valve-gdc):
   - 5,863 games earned more than $100k on Steam in 2025, a record. Comparable figures: about 5,000 (2024), about 4,000 (2022), about 3,000 (2020).
-  - The scope is unclear. PCGamesN says it "appears" to include games released before 2025, while Outlook India described it as 2025 releases only.
+  - The scope is unclear. PCGamesN says it "appears" to include games released before 2025, while [Outlook India](https://respawn.outlookindia.com/gaming/gaming-news/steam-growth-continues-as-5863-games-cross-100k-revenue-in-2025) described it as 2025 releases only.
   - Valve's Tom Giardino said $100k is "a drop in the ocean" for AAA but "a substantial reward for a solo developer," and that the trend holds at the $500k and $1M thresholds.
 - **[Estimate: Alinea Analytics, 2025 Year in Review, covering Jan 1–Nov 20, 2025]** — [GameDev Reports](https://gamedevreports.substack.com/p/alinea-analytics-2025-year-in-review); [Notebookcheck](https://www.notebookcheck.net/Indie-games-accounted-for-25-of-Steam-s-revenue-in-2025.1189429.0.html):
   - Just over 300 of about 20,000 2025 releases grossed more than $1M, about 1.5%.
@@ -151,9 +151,8 @@ I found no public dataset that measures what share of Steam releases come from s
 - **[Official: Valve, GDC 2026]** Giardino called $100k "a substantial reward for a solo developer" — [Game World Observer](https://gameworldobserver.com/2026/03/11/in-2025-nearly-6000-games-earned-over-100000-on-steam-a-record).
 - **[Estimate: GameDiscoverCo solo-developer case studies — anecdotes, selected on success]**
   - Rooftops & Alleys (solo, Berlin) sold about 70k units on Steam in its first month — [GameDiscoverCo](https://newsletter.gamediscover.co/p/how-this-solo-dev-parkour-game-sold).
-  - A solo-developer "incremental" game sold more than 100k — [GameDiscoverCo](https://newsletter.gamediscover.co/p/how-this-solo-dev-incremental-game).
+  - Gnorp Apologue (solo developer, Norway) was the #4 new Steam game of Dec 2023 by copies. GameDiscoverCo's "solo-dev 'incremental' game hit 100k+ sales" piece appears to be about this game, but the pairing was not confirmed from the full page — [GameDiscoverCo](https://newsletter.gamediscover.co/p/how-this-solo-dev-incremental-game).
   - A solo-developer 3D "gladiator sim" sold 10k units in its first 24 hours — [GameDiscoverCo](https://newsletter.gamediscover.co/p/analysis-how-a-solo-dev-gladiator).
-  - Gnorp Apologue (solo, Norway) was the #4 new Steam game of Dec 2023 by copies — [Game World Observer tag page](https://gameworldobserver.com/tag/gamediscoverco).
 - **[Estimate: Alinea 2025]** The top-grossing 2025 indie, Schedule I (about $151M), launched as essentially a one-person project — [GameDev Reports](https://gamedevreports.substack.com/p/alinea-analytics-2025-year-in-review); [PC Gamer](https://www.pcgamer.com/games/sim/schedule-1-is-the-kind-of-instant-steam-hit-that-was-only-ever-going-to-come-from-a-complete-rando/).
 - Academic work: postmortem studies exist, but none found reports commercial outcome by team size.
   - Washburn et al. (ICSE 2016) analysed 155 Gamasutra postmortems — [paper PDF](https://thomas-zimmermann.com/publications/files/washburn-icse-2016.pdf).
@@ -288,16 +287,16 @@ Seven of the 13 are 2D pixel-art games. Of the six 3D ones, two were made by exp
 - Publisher: Bigmode (Dunkey) — [Gameranx](https://gameranx.com/tag/animal-well/). He used Reaper for audio — [Noisy Pixel](https://noisypixel.net/animal-well-2024-indie-game-success/).
 - Style: 2D pixel art.
 
-**Vampire Survivors (Early Access Dec 2021) — Luca Galante (poncle)**
+**Vampire Survivors — Luca Galante (poncle)**
 - He started in 2020 with the Phaser (HTML5/JavaScript) framework, using default engine assets — [Game Developer](https://www.gamedeveloper.com/design/vampire-survivors-development-sounds-like-an-open-source-fueled-fever-dream); [Wikipedia](https://en.wikipedia.org/wiki/Vampire_Survivors).
 - **Bought art:** he swapped in a Castlevania-inspired asset pack he had bought years earlier. He spent "a total of £1100 on assets… between the illustrations and the sounds" — [PC Gamer](https://www.pcgamer.com/vampire-survivors-didnt-rip-off-castlevania-sprites-after-all/).
 - Prior expertise: several years in the gambling industry making virtual slot machines in London, where he learned JavaScript and HTML5. Slot-machine visual knowledge shaped the chest openings. He quit in Feb 2022 — [Multiplayer.it interview](https://multiplayer.it/articoli/vampire-survivors-intervista.html); [Multiplayer.it](https://multiplayer.it/notizie/vampire-survivors-ha-salvato-il-suo-autore-dal-lavorare-ai-giochi-dazzardo-per-sistemi-mobile.html); [Wikipedia](https://en.wikipedia.org/wiki/Vampire_Survivors).
   - Conflict: Wikipedia also says he was unemployed when development began in 2020.
 - Style: 2D pixel art from asset packs.
 
-**Buckshot Roulette (itch.io Dec 2023; Steam 2024) — Mike Klubnika**
+**Buckshot Roulette (itch.io first, then Steam) — Mike Klubnika**
 - Made in about 2 months. Engine: Godot. Released on itch.io first, then Steam — [GamesRadar](https://www.gamesradar.com/games/horror/he-made-a-viral-horror-game-in-2-months-it-sold-6-million-copies-and-now-he-can-make-whatever-he-wants-for-the-rest-of-his-life-my-final-theory-is-that-gambling-is-very-fun/); [Wikipedia](https://en.wikipedia.org/wiki/Buckshot_Roulette).
-- Style: 3D, set in a single room around a table.
+- Described as a "tabletop horror" game — [DEV Community](https://dev.to/wlz/why-buckshot-roulette-bet-on-godot-the-free-engine-behind-a-4-million-copy-tabletop-horror-3dpb). Its 3D first-person presentation was not re-verified from extracts (see Gaps).
 - Sales **[Reported; rising over time]**:
   - About 1M on Steam in two weeks — [Wikipedia](https://en.wikipedia.org/wiki/Buckshot_Roulette).
   - More than 4M — [Noisy Pixel](https://noisypixel.net/buckshot-roulette-ps5-ps4-nintendo-switch-4-million-sales/).
@@ -305,7 +304,7 @@ Seven of the 13 are 2D pixel-art games. Of the six 3D ones, two were made by exp
   - More than 8M — [GameDaily via NewsBreak](https://www.newsbreak.com/gamedaily-333497653/4416300265064-buckshot-roulette-started-off-free-now-it-s-sold-over-8-million-copies).
 - He became a Godot "Platinum" sponsor at €36,000 per year — [WN Hub](https://wnhub.io/news/engines/item-50134).
 
-**Schedule I (Early Access Mar 2025) — Tyler (TVGS), Australia**
+**Schedule I (Early Access 2025) — Tyler (TVGS), Australia**
 - "Besides the music and some graffiti art, Schedule 1 was entirely made by one guy in Australia named Tyler" — [PC Gamer](https://www.pcgamer.com/games/sim/schedule-1-is-the-kind-of-instant-steam-hit-that-was-only-ever-going-to-come-from-a-complete-rando/).
 - Engine: Unity — [Wikipedia](https://en.wikipedia.org/wiki/Schedule_I_(video_game)). Style: 3D.
 - Prior expertise: "almost a decade" of non-professional game development — [daily.dev summary (Weak)](https://daily.dev/posts/how-schedule-1-was-created-by-a-22-year-old-dev-uhosjxlol); [ScreenRant](https://screenrant.com/schedule-1-creator-tyler-age/).
@@ -358,7 +357,7 @@ Summary compiled from the cited findings above. "n/v" means not verified in this
 | Undertale | Fox plus hired artists (Temmie Chang: cutscenes, characters) | ~2.7 yrs | Established composer | GameMaker | 2D pixel |
 | Axiom Verge | Solo, including music | ~5 yrs, evenings/weekends | Professional game programmer (Petroglyph) | C#/XNA → MonoGame/FNA | 2D pixel |
 | Cave Story | Solo, including music | ~5 yrs, spare time | n/v (day job reported) | n/v | 2D pixel |
-| Lethal Company | Solo | planned 6 months; actual n/v | 11 years of hobby game-making (Roblox from 2012; earlier Steam games) | Unity | 3D |
+| Lethal Company | Solo | planned 6 months; actual n/v | Making games since 2012 (Roblox), then earlier Steam games from 2020 | Unity | 3D |
 | Balatro | Solo; music LouisF; publisher Playstack | ~2.2–2.5 yrs | IT worker | LÖVE | 2D pixel |
 | Animal Well | Solo; publisher Bigmode | ~7 yrs (4 part-time) | ~10 yrs pro game programmer | custom C++ | 2D pixel |
 | Vampire Survivors | Solo plus bought asset packs (~£1,100) | started 2020 | Slot-machine game programmer (JS) | Phaser | 2D pixel |
@@ -368,7 +367,7 @@ Summary compiled from the cited findings above. "n/v" means not verified in this
 | Banished | Solo, including graphics and sound | ~3 yrs, 5,500+ h | 10 yrs console graphics-engine programmer | custom | 3D |
 | A Short Hike | Solo core; music Mark Sparling; art and writing help | ~4–7 months | n/v | Unity | 3D |
 
-- **Depth-plus-breadth ("T-shaped"), not shallow generalism.** At least 9 of 13 developers had verifiable prior depth in one core discipline: Happ, Basso, Hodorowicz, Galante, LocalThunk and Barone in programming; Fox in music; Zeekerss and Tyler through about a decade of hobby game-making. They were broad in *production* but deep in at least one craft. Where they lacked depth, they usually bought or borrowed it:
+- **Depth-plus-breadth ("T-shaped"), not shallow generalism.** Roughly 9 of 13 developers had prior depth in one core discipline (Tyler's rests on a weak source): Happ, Basso, Hodorowicz, Galante, LocalThunk and Barone in programming; Fox in music; Zeekerss and Tyler through about a decade of hobby game-making. They were broad in *production* but deep in at least one craft. Where they lacked depth, they usually bought or borrowed it:
   - Fox hired artists.
   - LocalThunk, Tyler and Robinson-Yu used outside composers.
   - Galante bought sprite and sound packs.
@@ -391,6 +390,8 @@ Searches ran out before these could be verified:
 - Stardew's framework (XNA/MonoGame), and whether Barone redid his art.
 - Undertale's verified sales.
 - Banished's unit sales.
+- The 2D/3D labels for Lethal Company, Buckshot Roulette, Schedule I, Blue Prince, Banished and A Short Hike come from general knowledge of these widely played games, not from search extracts. They are uncontroversial but were not re-verified. Specific art-style claims, such as "low-poly with retro post-processing," are deliberately not made.
+- Undertale's "2.7 years" comes from a weak secondary page.
 
 ## 5. 3D vs 2D for solo developers; cost of 3D character art and animation
 
@@ -454,7 +455,7 @@ No dataset was found that measures solo success rates for 3D versus 2D games. Th
 ## 6. Layoffs 2023–2026 and what they imply for specialized AAA roles vs. independent paths
 
 ### Takeaway
-About 10,500 jobs were cut in 2023 and a record 14,600–15,600 in 2024. 2025 eased to about 5,300–9,200, depending on the tracker. 2026 is forecast at about 14,700 (as of Aug 2026), close to the record.
+About 10,500 jobs were cut in 2023 and a record 14,600–15,600 in 2024. 2025 eased to about 9,100–9,200 (Satvat). 2026 is forecast at about 14,700 (as of Aug 2026), close to the record.
 - Layoffs hit AAA companies hardest: two-thirds of AAA respondents report layoffs at their company, versus one-third at indie studios.
 - They are concentrated in North America, while global headcount is roughly flat as jobs shift to cheaper regions.
 - Specialized AAA roles proved insecure. Even so, Section 1's base rates show the independent path has a much worse *expected* income. The evidence supports "no path is safe," not "only specialists succeed."
@@ -479,7 +480,6 @@ About 10,500 jobs were cut in 2023 and a record 14,600–15,600 in 2024. 2025 ea
   - Udonis lists more than 10,500 for 2023 and more than 14,600 for 2024 — [Udonis](https://www.blog.udonis.co/mobile-marketing/mobile-games/game-industry-layoffs).
   - The Game Industry Layoffs tracker passed 13,000 for 2024 by Oct 2024 — [WN Hub](https://wnhub.io/news/hr/item-46078).
   - More than 5,000 were already laid off in early 2024 — [VGC](https://videogameschronicle.com/news/over-5000-games-industry-workers-have-already-lost-their-jobs-in-2024).
-  - An announcement-based tracker reported 5,300 for 2025 (8,500 for 2022, 10,500 for 2023, 14,600 for 2024), per a search summary citing a layoff tracker. Precise attribution was not verifiable.
 - **[Tracker/analysis: Satvat, 2026]** Global games employment rose about 0.6% from 2022 to 2026, from roughly 750k to 754k — [GamesBeat](https://gamesbeat.com/global-gamings-workforce-grew-0-6-in-4-years-but-north-americas-shrank-11-5-amir-satvat/):
   - About 48,000 roles were eliminated but about 52,500 hires were made.
   - North American employment fell 11.5%.
@@ -505,5 +505,5 @@ About 10,500 jobs were cut in 2023 and a record 14,600–15,600 in 2024. 2025 ea
 ### Gaps
 - No data was found on re-employment rates or time-to-rehire by discipline, which would show which specialties are more secure.
 - Satvat's final 2026 numbers are not available; the latest found forecast is Aug 11, 2026.
-- Tracker methodologies differ (announced cuts vs. modeled estimates), which explains the 5,300 vs. 9,197 discrepancy for 2025.
+- Tracker methodologies differ (announced cuts vs. modeled estimates). One search extract said an announcement-based tracker counted only about 5,300 layoffs in 2025 (and 8,500 for 2022, 10,500 for 2023, 14,600 for 2024). I could not tie that to a specific page, so it is not used above. If accurate, it shows how much the 2025 total depends on method.
 - I could not open the GDC PDFs for exact question wording. Secondary claims of "35% primarily self-fund" and "86% of solo devs self-fund" (GDC 2026) remain unverified; the PDF is listed at [InvestGame](https://investgame.net/news/pdf/2026-01-29-dec052f4_d88e_48ce_9f83_a18ce2f2a6e5_541400_gdc26_pdf_soti_report/) but could not be fetched.
