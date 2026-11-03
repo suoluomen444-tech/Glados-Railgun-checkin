@@ -1,7 +1,9 @@
 import requests
 import json
 import os
+import re
 import sys
+import time
 import logging
 from enum import Enum
 from typing import Dict, List, Optional, Tuple, Union
@@ -74,7 +76,8 @@ def log_method(func):
             logger.error(f"{LogEmoji.COOKIE}[{self.cookie_index}] {LogEmoji.DOMAIN}[{self.domain}] {LogEmoji.ERROR} {method_name} 执行失败: {e}")
 
             DEFAULT_ERRORS = {
-                "checkin": {"status": "签到失败", "points": "0", "message": ""},
+                # 响应无法解析等异常不是 Cookie 被拒绝, 记为请求出错
+                "checkin": {"status": "签到失败", "points": "0", "message": "", "request_error": True},
                 "get_status": ("None 天", -2),
                 "get_points": ("None 积分", 0),
                 "exchange": "",
@@ -179,6 +182,9 @@ class API:
     POINTS_URL = APIEndpoint.POINTS.value
     EXCHANGE_URL = APIEndpoint.EXCHANGE.value
 
+    # 遇到服务器错误 (5xx) 或网络错误时, 依次等待这些秒数后重试
+    RETRY_DELAYS = (10, 30)
+
     def __init__(self, domain: str, cookie_index: int = 0, verbose: bool = False):
         self.domain: str = domain
         self.cookie_index: int = cookie_index
@@ -232,26 +238,47 @@ class API:
         """获取完整 URL"""
         return f"https://{self.domain}{path}"
 
+    @staticmethod
+    def _summarize_response(text: str, limit: int = 200) -> str:
+        """压缩响应内容用于日志: HTML 页面 (如 Cloudflare 错误页) 只保留标题, 其他内容截断"""
+        match = re.search(r"<title>(.*?)</title>", text, re.IGNORECASE | re.DOTALL)
+        summary = " ".join((match.group(1) if match else text).split())
+        return summary if len(summary) <= limit else summary[:limit] + "..."
+
     def _make_request(self, url: str, method: str, data: Optional[Dict] = None, cookies: str = "") -> Optional[requests.Response]:
-        """发送 HTTP 请求"""
+        """发送 HTTP 请求, 遇到服务器错误 (5xx) 或网络错误时自动重试"""
         session_headers = self.headers.copy()
         session_headers["cookie"] = cookies
 
-        try:
-            if method.upper() == "POST":
-                response = self.session.post(url, headers=session_headers, data=data, timeout=(60, 120))
-            elif method.upper() == "GET":
-                response = self.session.get(url, headers=session_headers, timeout=(60, 120))
-            else:
-                self._log("error", LogEmoji.ERROR, f"不支持的 HTTP 方法: {method}", force=True)
-                return None
+        if method.upper() not in ("GET", "POST"):
+            self._log("error", LogEmoji.ERROR, f"不支持的 HTTP 方法: {method}", force=True)
+            return None
 
-            if not response.ok:
-                self._log("warning", LogEmoji.WARNING, f"向 {url} 发起的请求失败，状态码 {response.status_code}。响应内容: {response.text}", force=True)
-                return None
-            return response
-        except requests.exceptions.RequestException as e:
-            self._log("error", LogEmoji.ERROR, f"向 {url} 发起请求时发生网络错误: {e}", force=True)
+        attempts = len(self.RETRY_DELAYS) + 1
+        for attempt in range(1, attempts + 1):
+            try:
+                if method.upper() == "POST":
+                    response = self.session.post(url, headers=session_headers, data=data, timeout=(60, 120))
+                else:
+                    response = self.session.get(url, headers=session_headers, timeout=(60, 120))
+
+                if response.ok:
+                    return response
+                error = f"状态码 {response.status_code}。响应内容: {self._summarize_response(response.text)}"
+                retryable = response.status_code >= 500
+            except requests.exceptions.RequestException as e:
+                error = f"网络错误: {e}"
+                retryable = True
+
+            if not retryable:
+                self._log("warning", LogEmoji.WARNING, f"向 {url} 发起的请求失败，{error}", force=True)
+            elif attempt < attempts:
+                delay = self.RETRY_DELAYS[attempt - 1]
+                self._log("warning", LogEmoji.WARNING, f"向 {url} 发起的请求失败，{error}。{delay} 秒后进行第 {attempt + 1}/{attempts} 次尝试", force=True)
+                time.sleep(delay)
+                continue
+            else:
+                self._log("warning", LogEmoji.WARNING, f"向 {url} 发起的请求失败，{error}。已尝试 {attempts} 次，放弃", force=True)
             return None
 
     def _get_checkin_data(self) -> Dict[str, str]:
@@ -301,6 +328,8 @@ class API:
             result["code"] = CheckinStatus.FAILURE
             result["status"] = "签到失败"
             result["message"] = "网络请求失败"
+            # 请求出错 (服务器故障或网络问题), 不是 Cookie 被拒绝
+            result["request_error"] = True
 
         return result
 
@@ -385,6 +414,7 @@ class CheckinResult:
     points_total: str = "None"
     exchange: str = "未兑换"
     code: CheckinStatus = CheckinStatus.FAILURE  # 0: 成功, 1: 重复, -2: 失败
+    request_error: bool = False  # 签到请求是否出错 (服务器故障、网络问题或响应异常), 而不是被服务器拒绝
 
     def to_dict(self) -> Dict[str, Union[str, CheckinStatus]]:
         result_dict = asdict(self)
@@ -467,6 +497,7 @@ class Checker:
             checkin_result = api.checkin(cookie)
             result.status = checkin_result["status"]
             result.code = checkin_result.get("code", CheckinStatus.FAILURE)
+            result.request_error = checkin_result.get("request_error", False)
 
             # 3. 获取积分
             self._log(cookie_idx, domain, LogEmoji.POINTS, "查询总积分")
@@ -494,6 +525,11 @@ class Checker:
         all_cookies = {result.cookie_index for result in self.results}
         ok_cookies = {result.cookie_index for result in self.results if result.code != CheckinStatus.FAILURE}
         return sorted(all_cookies - ok_cookies)
+
+    def get_failure_causes(self, cookie_index: int) -> Tuple[bool, bool]:
+        """获取该 Cookie 签到失败的原因: (是否有域名请求出错, 是否有域名拒绝了 Cookie)"""
+        failed = [result for result in self.results if result.cookie_index == cookie_index and result.code == CheckinStatus.FAILURE]
+        return any(result.request_error for result in failed), any(not result.request_error for result in failed)
 
     def format_results(self) -> Tuple[str, str, str]:
         """格式化结果"""
@@ -553,8 +589,17 @@ def main():
             # 一个 Cookie 只要在任一域名上签到成功或重复签到就算正常
             failed_cookies = checker.get_failed_cookies()
             if failed_cookies:
-                logger.error(f"{LogEmoji.ERROR} Cookie {failed_cookies} 在所有域名上均签到失败, 请检查 Cookie 是否失效。")
                 exit_code = 1
+            for cookie_idx in failed_cookies:
+                errored, rejected = checker.get_failure_causes(cookie_idx)
+                if errored and rejected:
+                    # Cookie 在不属于它的域名上本来就会被拒绝, 所以更可能是 Cookie 所属的域名暂时故障
+                    reason = "签到失败: 部分域名请求出错 (服务器故障或网络问题, 详见上方日志), 其余域名拒绝了该 Cookie。通常是 GLaDOS 暂时故障, 之后的定时运行会自动重试; 如果第二天仍然失败, 请检查 Cookie 是否失效。"
+                elif errored:
+                    reason = "签到失败: 请求 GLaDOS 时出错 (服务器故障或网络问题, 详见上方日志), 通常是暂时的, 之后的定时运行会自动重试。"
+                else:
+                    reason = "在所有域名上均签到失败, 请检查 Cookie 是否失效。"
+                logger.error(f"{LogEmoji.ERROR} Cookie [{cookie_idx}] {reason}")
 
     except Exception as e:
         logger.error(f"{LogEmoji.ERROR} 主程序执行过程中发生未预期的错误: {e}")
