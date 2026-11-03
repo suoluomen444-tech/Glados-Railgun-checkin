@@ -1,4 +1,5 @@
 import requests
+import functools
 import json
 import os
 import re
@@ -60,6 +61,7 @@ class LogEmoji:
 def log_method(func):
     """日志装饰器"""
 
+    @functools.wraps(func)
     def wrapper(self, *args, **kwargs):
         method_name = func.__name__
         emoji_map = {
@@ -79,7 +81,7 @@ def log_method(func):
                 # 响应无法解析等异常不是 Cookie 被拒绝, 记为请求出错
                 "checkin": {"status": "签到失败", "points": "0", "message": "", "request_error": True},
                 "get_status": ("None 天", -2),
-                "get_points": ("None 积分", 0),
+                "get_points": ("None 积分", None),
                 "exchange": "",
             }
 
@@ -145,7 +147,7 @@ class Config:
         else:
             self.cookies_list = [cookie.strip() for cookie in raw_cookies_env.split("&") if cookie.strip()]
             if not self.cookies_list:
-                raise ValueError(f"环境变量 '{self.ENV_COOKIES}' 已设置，但未包含任何有效的 Cookie。")
+                logger.warning(f"{LogEmoji.WARNING} 环境变量 '{self.ENV_COOKIES}' 已设置，但未包含任何有效的 Cookie。")
 
         if not exchange_plan_env:
             logger.warning(f"{LogEmoji.WARNING} 环境变量 '{self.ENV_EXCHANGE_PLAN}' 未设置，将使用默认兑换计划 {self.DEFAULT_EXCHANGE_PLAN}。")
@@ -162,8 +164,9 @@ class Config:
         logger.info(f"{LogEmoji.INFO} 当前 {self.ENV_PUSH_KEY} {'已设置' if push_key_env else '未设置'}。")
         logger.info(f"{LogEmoji.INFO} 当前 {self.ENV_EXCHANGE_PLAN}: {self.exchange_plan}。")
 
-        if verbose_env is not None:
-            verbose_env_lower = verbose_env.lower()
+        # Actions 中未配置的 secret 会以空字符串传入, 与未设置同样处理
+        if verbose_env:
+            verbose_env_lower = verbose_env.strip().lower()
             if verbose_env_lower in ["true", "1", "yes", "y"]:
                 self.verbose = True
             elif verbose_env_lower in ["false", "0", "no", "n"]:
@@ -327,7 +330,7 @@ class API:
             self._log("warning", LogEmoji.WARNING, "签到失败", force=True)
             result["code"] = CheckinStatus.FAILURE
             result["status"] = "签到失败"
-            result["message"] = "网络请求失败"
+            result["message"] = "请求出错 (服务器故障或网络问题)"
             # 请求出错 (服务器故障或网络问题), 不是 Cookie 被拒绝
             result["request_error"] = True
 
@@ -357,8 +360,8 @@ class API:
             return "None 天", -2
 
     @log_method
-    def get_points(self, cookies: str) -> Tuple[str, int]:
-        """获取积分"""
+    def get_points(self, cookies: str) -> Tuple[str, Optional[int]]:
+        """获取积分, 查询失败时积分数为 None"""
         url = self._get_full_url(self.POINTS_URL)
         response = self._make_request(url, "GET", cookies=cookies)
 
@@ -375,13 +378,13 @@ class API:
                 return points_str, points_num
             else:
                 self._log("info", LogEmoji.FAIL, f"{{ code : {code}, points : {points} 积分}}", force=True)
-                return "None 积分", 0
+                return "None 积分", None
         else:
             self._log("warning", LogEmoji.WARNING, "获取积分失败", force=True)
-            return "None 积分", 0
+            return "None 积分", None
 
     @log_method
-    def exchange(self, cookies: str, plan: str, required_points: int) -> str:
+    def exchange(self, cookies: str, plan: str) -> str:
         """执行兑换"""
         url = self._get_full_url(self.EXCHANGE_URL)
         response = self._make_request(url, "POST", {"planType": plan}, cookies)
@@ -392,7 +395,7 @@ class API:
             message = data.get("message", "未知错误")
 
             if code == 0:
-                self._log("info", LogEmoji.SUCCESS, f"{{ code : {code}, message : {message} }}")
+                self._log("info", LogEmoji.SUCCESS, f"{{ code : {code}, message : {message} }}", force=True)
                 return f"兑换成功: {plan}"
             else:
                 self._log("info", LogEmoji.FAIL, f"{{ code : {code}, message : {message} }}", force=True)
@@ -414,6 +417,7 @@ class CheckinResult:
     points_total: str = "None"
     exchange: str = "未兑换"
     code: CheckinStatus = CheckinStatus.FAILURE  # 0: 成功, 1: 重复, -2: 失败
+    message: str = ""  # 签到接口返回的消息
     request_error: bool = False  # 签到请求是否出错 (服务器故障、网络问题或响应异常), 而不是被服务器拒绝
 
     def to_dict(self) -> Dict[str, Union[str, CheckinStatus]]:
@@ -460,59 +464,64 @@ class Checker:
         """执行所有签到任务"""
         cookie_count = len(self.config.cookies_list)
         domain_count = len(self.config.DOMAINS)
-        total_tasks = cookie_count * domain_count
-        task_idx = 0
 
-        logger.info(f"{LogEmoji.INFO} 共 {cookie_count} 个 Cookie, {domain_count} 个域名, 共 {total_tasks} 个任务")
+        logger.info(f"{LogEmoji.INFO} 共 {cookie_count} 个 Cookie, 每个 Cookie 依次尝试 {domain_count} 个域名, 在所属域名签到后跳过其余域名")
 
         for cookie_idx, cookie in enumerate(self.config.cookies_list, 1):
             logger.info(f"{LogEmoji.START} ========== 开始处理 Cookie {cookie_idx} ==========")
 
-            for domain in self.config.DOMAINS:
-                task_idx += 1
-                logger.info(f"{LogEmoji.INFO} ----- 任务 {task_idx}/{total_tasks}: {LogEmoji.COOKIE}[{cookie_idx}] on {LogEmoji.DOMAIN}[{domain}] -----")
+            for domain_idx, domain in enumerate(self.config.DOMAINS, 1):
+                logger.info(f"{LogEmoji.INFO} ----- 域名 {domain_idx}/{domain_count}: {LogEmoji.COOKIE}[{cookie_idx}] on {LogEmoji.DOMAIN}[{domain}] -----")
 
                 result = self._checkin_on_domain(cookie, cookie_idx, domain)
                 self.results.append(result)
 
                 result_message = f"结果: {result.status}"
-                if result.code == CheckinStatus.SUCCESS:
-                    if self.config.verbose:
-                        result_message = f"结果: {result.status}, 获得 {result.points} 积分, 剩余 {result.days}, 总 {result.points_total}, {result.exchange}"
-                    self._log(cookie_idx, domain, LogEmoji.SUCCESS, result_message, force=True)
-                else:
+                if result.code == CheckinStatus.FAILURE:
                     self._log(cookie_idx, domain, LogEmoji.WARNING, result_message, force=True)
+                    continue
+
+                if self.config.verbose:
+                    result_message += f", 获得 {result.points} 积分, 剩余 {result.days}, 总 {result.points_total}, {result.exchange}"
+                emoji = LogEmoji.SUCCESS if result.code == CheckinStatus.SUCCESS else LogEmoji.REPEAT
+                self._log(cookie_idx, domain, emoji, result_message, force=True)
+                # 一个 Cookie 只属于一个域名, 签到成功或重复签到后, 其余域名只会拒绝它, 不必再试
+                break
 
     def _checkin_on_domain(self, cookie: str, cookie_idx: int, domain: str) -> CheckinResult:
         result = CheckinResult(cookie_idx, domain)
 
         with API(domain, cookie_idx, verbose=self.config.verbose) as api:
-            # 1. 获取状态
-            self._log(cookie_idx, domain, LogEmoji.STATUS, "查询剩余天数")
-            days_str, status_code = api.get_status(cookie)
-            result.days = days_str
-
-            # 2. 签到
+            # 1. 签到
             self._log(cookie_idx, domain, LogEmoji.CHECKIN, "执行签到")
             checkin_result = api.checkin(cookie)
             result.status = checkin_result["status"]
             result.code = checkin_result.get("code", CheckinStatus.FAILURE)
+            result.points = checkin_result.get("points", "0")
+            result.message = checkin_result.get("message", "")
             result.request_error = checkin_result.get("request_error", False)
 
-            # 3. 获取积分
-            self._log(cookie_idx, domain, LogEmoji.POINTS, "查询总积分")
-            points_str, points_num = api.get_points(cookie)
-            result.points_total = points_str
+            if result.code == CheckinStatus.FAILURE:
+                # Cookie 不属于该域名、已失效或请求出错时, 后续的查询和兑换也会失败, 直接跳过
+                return result
 
-            # 4. 执行兑换
-            required_points = self.config.EXCHANGE_PLANS.get(self.config.exchange_plan, 500)
-            self._log(
-                cookie_idx,
-                domain,
-                LogEmoji.EXCHANGE,
-                f"开始兑换 {self.config.exchange_plan} (需要 {required_points} 积分)",
-            )
-            result.exchange = api.exchange(cookie, self.config.exchange_plan, required_points)
+            # 2. 查询剩余天数
+            self._log(cookie_idx, domain, LogEmoji.STATUS, "查询剩余天数")
+            result.days, _ = api.get_status(cookie)
+
+            # 3. 查询总积分
+            self._log(cookie_idx, domain, LogEmoji.POINTS, "查询总积分")
+            result.points_total, points_num = api.get_points(cookie)
+
+            # 4. 积分足够时兑换 (积分查询失败时仍尝试兑换, 由服务器判断)
+            plan = self.config.exchange_plan
+            required_points = self.config.EXCHANGE_PLANS[plan]
+            if points_num is not None and points_num < required_points:
+                result.exchange = f"未兑换: 积分不足 ({points_num}/{required_points})"
+                self._log(cookie_idx, domain, LogEmoji.EXCHANGE, f"积分 {points_num} 未达到 {plan} 所需的 {required_points}, 跳过兑换")
+            else:
+                self._log(cookie_idx, domain, LogEmoji.EXCHANGE, f"开始兑换 {plan} (需要 {required_points} 积分)")
+                result.exchange = api.exchange(cookie, plan)
 
         return result
 
@@ -532,27 +541,36 @@ class Checker:
         return any(result.request_error for result in failed), any(not result.request_error for result in failed)
 
     def format_results(self) -> Tuple[str, str, str]:
-        """格式化结果"""
-        results = self.get_results()
+        """格式化结果: 每个 Cookie 只计一次。
 
-        success_count = sum(1 for r in results if r["code"] == CheckinStatus.SUCCESS)
-        repeat_count = sum(1 for r in results if r["code"] == CheckinStatus.REPEAT)
-        fail_count = sum(1 for r in results if r["code"] == CheckinStatus.FAILURE)
+        签到正常的 Cookie 只列出所属域名的结果 (其余域名本来就会拒绝它), 签到失败的列出每个域名的失败原因。
+        """
+        cookie_indexes = sorted({result.cookie_index for result in self.results})
+        failed_cookies = set(self.get_failed_cookies())
 
-        title = f"GLaDOS 签到, 成功{success_count}, 失败{fail_count}, 重复{repeat_count}"
-
+        counts = {code: 0 for code in CheckinStatus}
         send_content_lines = []
         log_content_lines = []
-        for i, res in enumerate(results, 1):
-            line = f"#{i} P:{res['points']} 剩余:{res['days']} 总积分:{res['points_total']} | {res['status']} | {res['exchange']}"
-            send_content_lines.append(line)
-
-            if self.config.verbose:
-                log_line = line
+        for cookie_idx in cookie_indexes:
+            cookie_results = [result for result in self.results if result.cookie_index == cookie_idx]
+            if cookie_idx in failed_cookies:
+                counts[CheckinStatus.FAILURE] += 1
             else:
-                log_line = f"#{i} {res['status']}"
-            log_content_lines.append(log_line)
+                cookie_results = [result for result in cookie_results if result.code != CheckinStatus.FAILURE]
+                counts[cookie_results[0].code] += 1
 
+            for res in cookie_results:
+                prefix = f"#{cookie_idx} [{res.domain}]"
+                if res.code == CheckinStatus.FAILURE:
+                    line = f"{prefix} {res.status}: {res.message}" if res.message else f"{prefix} {res.status}"
+                    log_line = line
+                else:
+                    line = f"{prefix} P:{res.points} 剩余:{res.days} 总积分:{res.points_total} | {res.status} | {res.exchange}"
+                    log_line = line if self.config.verbose else f"{prefix} {res.status}"
+                send_content_lines.append(line)
+                log_content_lines.append(log_line)
+
+        title = f"GLaDOS 签到, 成功{counts[CheckinStatus.SUCCESS]}, 失败{counts[CheckinStatus.FAILURE]}, 重复{counts[CheckinStatus.REPEAT]}"
         content = "\n".join(send_content_lines)
         log_content = "\n".join(log_content_lines)
         return title, content, log_content
@@ -566,6 +584,7 @@ def main():
     """主函数"""
     # 退出码非 0 时 Actions 会标记为失败, GitHub 会发送失败通知邮件
     exit_code = 0
+    config = None
     try:
         # 1. 加载配置
         logger.info(f"{LogEmoji.START} 步骤 1: 加载配置")
@@ -602,14 +621,16 @@ def main():
                 logger.error(f"{LogEmoji.ERROR} Cookie [{cookie_idx}] {reason}")
 
     except Exception as e:
-        logger.error(f"{LogEmoji.ERROR} 主程序执行过程中发生未预期的错误: {e}")
-        title, content, log_content = "# 脚本执行出错", str(e), str(e)
+        logger.exception(f"{LogEmoji.ERROR} 主程序执行过程中发生未预期的错误: {e}")
+        title, content = "# 脚本执行出错", str(e)
         exit_code = 1
 
     # 4. 发送推送
     logger.info(f"{LogEmoji.START} 步骤 4: 发送推送")
-    push_service = PushService(config if "config" in locals() else "")
-    push_service.send(title, content)
+    if config is None:
+        logger.warning(f"{LogEmoji.WARNING} 配置加载失败, 无法发送推送通知。")
+    else:
+        PushService(config).send(title, content)
     logger.info(f"{LogEmoji.END} 签到完成")
     sys.exit(exit_code)
 

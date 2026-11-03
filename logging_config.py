@@ -2,12 +2,21 @@ import logging.config
 import datetime
 
 
+BEIJING_TZ = datetime.timezone(datetime.timedelta(hours=8))
+
+
 def beijing_time_converter(timestamp):
     """将时间转换为北京时间"""
-    utc_dt = datetime.datetime.fromtimestamp(timestamp, tz=datetime.timezone.utc)
-    beijing_tz = datetime.timezone(datetime.timedelta(hours=8))
-    beijing_dt = utc_dt.astimezone(beijing_tz)
-    return beijing_dt.timetuple()
+    return datetime.datetime.fromtimestamp(timestamp, tz=BEIJING_TZ).timetuple()
+
+
+class BeijingTimeFormatter(logging.Formatter):
+    """日志时间使用北京时间 (Actions 运行环境是 UTC 时区)。
+
+    dictConfig 会忽略 formatter 配置中的 converter 字段, 所以需要通过子类指定。
+    """
+
+    converter = staticmethod(beijing_time_converter)
 
 
 LOGGING_CONFIG = {
@@ -15,9 +24,9 @@ LOGGING_CONFIG = {
     "disable_existing_loggers": False,
     "formatters": {
         "standard": {
-            "format": "%(asctime)s - %(levelname)s - %(message)s",
+            "()": BeijingTimeFormatter,
+            "fmt": "%(asctime)s - %(levelname)s - %(message)s",
             "datefmt": "%Y-%m-%d %H:%M:%S",
-            "converter": beijing_time_converter,
         },
     },
     "handlers": {
