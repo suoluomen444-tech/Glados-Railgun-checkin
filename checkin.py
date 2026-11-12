@@ -1,4 +1,5 @@
 import requests
+import hashlib
 import json
 import os
 import re
@@ -32,6 +33,7 @@ class APIEndpoint(Enum):
     """API端点"""
 
     CHECKIN = "/api/user/checkin"
+    CHECKIN_CHALLENGE = "/api/user/checkin/challenge"
     STATUS = "/api/user/status"
     POINTS = "/api/user/points"
     EXCHANGE = "/api/user/exchange"
@@ -178,12 +180,18 @@ class API:
     """API 调用"""
 
     CHECKIN_URL = APIEndpoint.CHECKIN.value
+    CHALLENGE_URL = APIEndpoint.CHECKIN_CHALLENGE.value
     STATUS_URL = APIEndpoint.STATUS.value
     POINTS_URL = APIEndpoint.POINTS.value
     EXCHANGE_URL = APIEndpoint.EXCHANGE.value
 
     # 遇到服务器错误 (5xx) 或网络错误时, 依次等待这些秒数后重试
     RETRY_DELAYS = (10, 30)
+
+    # 2026-11 起 GLaDOS 网页端签到前先取 challenge 的 nonce, 等待片刻后提交 sha256("{nonce}.glados-observe-v1")。
+    # 不带 proof 的签到只给固定 1 积分, 连续签到天数也不累计。参数与上游 Devilstore/Glados-Railgun-checkin 一致。
+    CHALLENGE_SUFFIX = "glados-observe-v1"
+    CHALLENGE_DELAY_SECONDS = 2.5
 
     def __init__(self, domain: str, cookie_index: int = 0, verbose: bool = False):
         self.domain: str = domain
@@ -245,8 +253,8 @@ class API:
         summary = " ".join((match.group(1) if match else text).split())
         return summary if len(summary) <= limit else summary[:limit] + "..."
 
-    def _make_request(self, url: str, method: str, data: Optional[Dict] = None, cookies: str = "") -> Optional[requests.Response]:
-        """发送 HTTP 请求, 遇到服务器错误 (5xx) 或网络错误时自动重试"""
+    def _make_request(self, url: str, method: str, data: Optional[Dict] = None, cookies: str = "", json_body: bool = False) -> Optional[requests.Response]:
+        """发送 HTTP 请求, 遇到服务器错误 (5xx) 或网络错误时自动重试。json_body=True 时以 JSON 提交 data"""
         session_headers = self.headers.copy()
         session_headers["cookie"] = cookies
 
@@ -257,7 +265,9 @@ class API:
         attempts = len(self.RETRY_DELAYS) + 1
         for attempt in range(1, attempts + 1):
             try:
-                if method.upper() == "POST":
+                if method.upper() == "POST" and json_body:
+                    response = self.session.post(url, headers=session_headers, json=data, timeout=(60, 120))
+                elif method.upper() == "POST":
                     response = self.session.post(url, headers=session_headers, data=data, timeout=(60, 120))
                 else:
                     response = self.session.get(url, headers=session_headers, timeout=(60, 120))
@@ -285,39 +295,103 @@ class API:
         """获取签到数据"""
         return {"token": self.domain}
 
+    def _get_challenge(self, cookies: str) -> Optional[Dict[str, str]]:
+        """获取签到 challenge 并计算 proof, 返回 {"nonce", "proof"}; 取不到返回 None, 由调用方按旧协议提交"""
+        url = self._get_full_url(self.CHALLENGE_URL)
+        response = self._make_request(url, "GET", cookies=cookies)
+        if response is None:
+            return None
+
+        try:
+            data = response.json()
+        except ValueError:
+            self._log("warning", LogEmoji.WARNING, f"签到 challenge 响应无法解析: {self._summarize_response(response.text)}", force=True)
+            return None
+
+        nonce = data.get("nonce") if isinstance(data, dict) else None
+        if not isinstance(data, dict) or data.get("code") != 0 or not nonce:
+            self._log("warning", LogEmoji.WARNING, f"签到 challenge 响应异常: {self._summarize_response(json.dumps(data, ensure_ascii=False))}", force=True)
+            return None
+
+        # 网页端拿到 challenge 后会等待一会儿再提交
+        time.sleep(self.CHALLENGE_DELAY_SECONDS)
+        proof = hashlib.sha256(f"{nonce}.{self.CHALLENGE_SUFFIX}".encode()).hexdigest()
+        self._log("info", LogEmoji.INFO, "已获取签到 challenge", force=True)
+        return {"nonce": str(nonce), "proof": proof}
+
+    @staticmethod
+    def _earned_points(data: Dict) -> str:
+        """本次签到所得积分: 优先顶层 points, 其次签到记录 list[0].change"""
+        points = data.get("points")
+        if points is None:
+            records = data.get("list")
+            if isinstance(records, list) and records and isinstance(records[0], dict):
+                points = records[0].get("change")
+        try:
+            return str(int(float(points)))
+        except (TypeError, ValueError):
+            return "0"
+
     @log_method
     def checkin(self, cookies: str) -> Dict[str, Union[str, CheckinStatus]]:
         """执行签到"""
         url = self._get_full_url(self.CHECKIN_URL)
         checkin_data = self._get_checkin_data()
-        response = self._make_request(url, "POST", checkin_data, cookies)
+        challenge = self._get_challenge(cookies)
+        if challenge:
+            checkin_data.update(challenge)
+        else:
+            self._log("warning", LogEmoji.WARNING, "未取得签到 challenge, 按旧协议提交 (只能拿到 1 积分)", force=True)
+        response = self._make_request(url, "POST", checkin_data, cookies, json_body=bool(challenge))
 
         result = {
             "status": "签到失败",
             "points": "0",
             "message": "",
             "code": CheckinStatus.FAILURE,
+            # 没走 challenge 的签到只给 1 积分, 成功时要提醒
+            "legacy": not challenge,
         }
 
         if response:
             data = response.json()
             code = data.get("code", -2)
-            message = data.get("message", "无消息字段")
-            points = str(data.get("points", 0))
+            if isinstance(code, str) and code.strip().lstrip("-").isdigit():
+                code = int(code.strip())
+            message = str(data.get("message", "无消息字段"))
+            points = self._earned_points(data)
+            repeated = data.get("repeated")
 
-            if code == CheckinStatus.SUCCESS.value:
-                self._log("info", LogEmoji.SUCCESS, f"{{ code : {code}, points : {points}, message : {message} }}")
+            if "please checkin via" in message.lower():
+                # Cookie 不属于这个域名, 这种响应 code 可能是 0, 不能算签到成功
+                status = CheckinStatus.FAILURE
+            elif isinstance(repeated, bool):
+                if repeated:
+                    status = CheckinStatus.REPEAT
+                else:
+                    status = CheckinStatus.SUCCESS if code == CheckinStatus.SUCCESS.value else CheckinStatus.FAILURE
+            elif code == CheckinStatus.SUCCESS.value:
+                status = CheckinStatus.SUCCESS
+            elif code == CheckinStatus.REPEAT.value or data.get("checkedIn") is True:
+                status = CheckinStatus.REPEAT
+            else:
+                status = CheckinStatus.FAILURE
+
+            if status == CheckinStatus.SUCCESS:
+                self._log("info", LogEmoji.SUCCESS, f"{{ code : {code}, points : {points}, message : {message} }}", force=True)
                 result["code"] = CheckinStatus.SUCCESS
                 result["status"] = "签到成功"
                 result["points"] = points
                 result["message"] = message
-            elif code == CheckinStatus.REPEAT.value:
+            elif status == CheckinStatus.REPEAT:
                 self._log("info", LogEmoji.REPEAT, f"{{ code : {code}, message : {message} }}", force=True)
                 result["code"] = CheckinStatus.REPEAT
                 result["status"] = "重复签到"
                 result["points"] = "0"
                 result["message"] = message
             else:
+                if code == 4 and data.get("reason") == "device-mismatch":
+                    message = f"{message} (设备平台不匹配, loginDevice={data.get('loginDevice')}; 脚本用的是 Windows Chrome 的 UA, 请在 Windows 电脑上登录后重新复制 Cookie)"
                 self._log("info", LogEmoji.FAIL, f"{{ code : {code}, message : {message} }}", force=True)
                 result["code"] = CheckinStatus.FAILURE
                 result["status"] = "签到失败"
@@ -415,6 +489,7 @@ class CheckinResult:
     exchange: str = "未兑换"
     code: CheckinStatus = CheckinStatus.FAILURE  # 0: 成功, 1: 重复, -2: 失败
     request_error: bool = False  # 签到请求是否出错 (服务器故障、网络问题或响应异常), 而不是被服务器拒绝
+    legacy: bool = False  # 是否没走 challenge, 按旧协议签到 (只给 1 积分)
 
     def to_dict(self) -> Dict[str, Union[str, CheckinStatus]]:
         result_dict = asdict(self)
@@ -498,6 +573,7 @@ class Checker:
             result.status = checkin_result["status"]
             result.code = checkin_result.get("code", CheckinStatus.FAILURE)
             result.request_error = checkin_result.get("request_error", False)
+            result.legacy = checkin_result.get("legacy", False)
 
             # 3. 获取积分
             self._log(cookie_idx, domain, LogEmoji.POINTS, "查询总积分")
@@ -600,6 +676,12 @@ def main():
                 else:
                     reason = "在所有域名上均签到失败, 请检查 Cookie 是否失效。"
                 logger.error(f"{LogEmoji.ERROR} Cookie [{cookie_idx}] {reason}")
+
+            # 签到成功但没走 challenge: 只拿到 1 积分, 多半是 GLaDOS 又改了签到协议, 标记失败让 GitHub 发邮件提醒
+            for res in checker.results:
+                if res.code == CheckinStatus.SUCCESS and res.legacy:
+                    exit_code = 1
+                    logger.error(f"{LogEmoji.ERROR} Cookie [{res.cookie_index}] 在 {res.domain} 签到成功, 但没取到 challenge, 按旧协议只能拿到 1 积分。GLaDOS 可能又改了签到方式, 请对照上游仓库更新脚本。")
 
     except Exception as e:
         logger.error(f"{LogEmoji.ERROR} 主程序执行过程中发生未预期的错误: {e}")
